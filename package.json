@@ -1,0 +1,32 @@
+{
+    "name": "rapgraff",
+    "version": "0.0.1",
+    "author": "Sean Brennan <whalesonstilts2012@gmail.com>",
+    "contributors": [
+        {
+            "name": "Sean Brennan",
+            "email": "whalesonstilts2012@gmail.com",
+            "twitter": "@eyebraus"
+        }
+    ],
+    "description": "View and discover collabs between hip hop artists using 2D graphs!",
+    "private": true,
+    "scripts": {
+        "start": "node app",
+        "test": "jasmine-node spec/"
+    },
+    "dependencies": {
+        "ejs": "*",
+        "express": "3.0.0rc4",
+        "nano": "*",
+        "stylus": "*",
+        "underscore": "*"
+    },
+    "devDependencies": {
+        "jasmine-node": "*"
+    },
+    "engines": {
+        "node": "*",
+        "npm": "*"
+    }
+}
