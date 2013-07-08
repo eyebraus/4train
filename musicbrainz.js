@@ -70,7 +70,7 @@ var musicbrainz_api = {
                     artist_page += artists.length;
                     _.each(artists, function(artist) {
                         if(!_.contains(found_artists, artist.$.id))
-                            lookup_queue.push({ service: "lookup", type: "artist", data: artist });
+                            lookup_queue.push({ type: "artist", data: artist });
                     });
                     // keep searching, or move on to lookups
                     if(artist_page < artist_count)
