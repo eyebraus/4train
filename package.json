@@ -21,6 +21,7 @@
         "nano": "*",
         "stylus": "*",
         "underscore": "*",
+        "vargs": "*",
         "xml2js": "*"
     },
     "devDependencies": {
