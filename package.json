@@ -19,11 +19,12 @@
         "backbone": "*",
         "ejs": "*",
         "express": "3.0.0rc4",
+        "jake": "*",
+        "jquery": "*",
         "nano": "*",
         "stylus": "*",
         "underscore": "*",
-        "vargs": "*",
-        "xml2js": "*"
+        "vargs": "*"
     },
     "devDependencies": {
         "jasmine-node": "*"
