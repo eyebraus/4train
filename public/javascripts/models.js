@@ -1,17 +1,36 @@
 
 var _ = require('underscore')._,
-    Backbone = require('backbone');
+    Backbone = require('backbone'),
+    $ = require('jquery').create(),
+    config = require('../../config'),
+    url = require('url');
+Backbone.$ = $; // fuck this b
 
 var CouchModel = Backbone.Model.extend({
-    /* custom sync stuff goes here! */
     defaults: {
         idAttribute: "_id",
-        klass: "CouchModel"
+        klass: "CouchModel",
+    },
+
+    urlRoot: "/" + config.database.name,
+
+    url: function() {
+        return this.urlRoot + "/" + this.get("_id");
+    },
+
+    sync: function(method, model, options) {
+        // make the database's url explicit
+        if(!_.isUndefined(options) && !_.isUndefined(options.url))
+            options.url = url.resolve(config.database.url(), options.url);
+        else if(_.result(model, 'url'))
+            options.url = url.resolve(config.database.url(), _.result(model, 'url'));
+        return Backbone.sync.apply(this, [method, model, options]);
     }
 });
 
 var CouchCollection = Backbone.Collection.extend({
     toJSON: function() {
+        // instead of saving entire objects, save only IDs for fast lookup
         return this.map(function(i) { return { _id: i._id }; });
     }
 });
@@ -23,18 +42,22 @@ var Track = exports.Track = CouchModel.extend({
     },
 
     initialize: function(attrs) {
-        this.set({
-            _id: attrs.mbid || null,
-            name: attrs.name || null,
-            url: attrs.url || null,
-            images: _.map(attrs.image, function(img) {
+        if(!_.isUndefined(attrs.mbid))
+            this.set({ _id: attrs.mbid });
+        if(!_.isUndefined(attrs.name))
+            this.set({ name: attrs.name });
+        if(!_.isUndefined(attrs.url))
+            this.set({ url: attrs.url });
+        if(!_.isUndefined(attrs.image))
+            this.set({ images: _.map(attrs.image, function(img) {
                 return { url: img["#text"], size: img.size };
-            }),
-            artist: attrs.artist.mbid,
-            duration: parseInt(attrs.duration) || -1,
-            playcount: parseInt(attrs.playcount) || -1,
-            listeners: parseInt(attrs.listeners) || -1,
-        });
+            }) });
+        if(!_.isUndefined(attrs.duration))
+            this.set({ duration: parseInt(attrs.duration) });
+        if(!_.isUndefined(attrs.playcount))
+            this.set({ playcount: parseInt(attrs.playcount) });
+        if(!_.isUndefined(attrs.listeners))
+            this.set({ listeners: parseInt(attrs.listeners) });
     },
 
     validate: function(attrs, options) {
@@ -83,14 +106,16 @@ var Artist = exports.Artist = CouchModel.extend({
     },
 
     initialize: function(attrs) {
-        this.set({
-            _id: attrs.mbid || null,
-            name: attrs.name || null,
-            url: attrs.url || null,
-            images: _.map(attrs.image, function(img) {
+        if(!_.isUndefined(attrs.mbid))
+            this.set({ _id: attrs.mbid });
+        if(!_.isUndefined(attrs.name))
+            this.set({ name: attrs.name });
+        if(!_.isUndefined(attrs.url))
+            this.set({ url: attrs.url });
+        if(!_.isUndefined(attrs.image))
+            this.set({ images: _.map(attrs.image, function(img) {
                 return { url: img["#text"], size: img.size };
-            })
-        });
+            }) });
     },
 
     validate: function(attrs, options) {
@@ -120,17 +145,17 @@ var Artist = exports.Artist = CouchModel.extend({
     },
 
     parse: function(resp, options) {
-        var orig = Backbone.Model.parse.apply(this, [resp, options]),
-            result = _.clone(orig);
+        var orig = Backbone.Model.parse.apply(this, [resp, options]);
+        var result = _.clone(orig);
         // build collections
         result.tracks = this.tracks;
         result.tracks.add(orig.tracks);
         result.tracks.fetch();
 
         return result;
-    }
+    },
 
     toJSON: function() {
-        return _.extend(_.(this.attributes), { tracks: this.tracks.toJSON() });
+        return _.extend(this.attributes, { tracks: this.tracks.toJSON() });
     }
 });
