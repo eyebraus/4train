@@ -9,12 +9,37 @@ var config = require('./config'),
     _ = require('underscore')._,
     Backbone = require('backbone'),
     querystring = require('querystring'),
-    xml2js = require('xml2js'),
     nano = require('nano'),
     http = require('http'),
     vargs = require('vargs').Constructor,
-    Artist = require('public/javascripts/models').Artist,
-    Track = require('public/javascripts/models').Track;
+    Artist = require('./public/javascripts/models').Artist,
+    Track = require('./public/javascripts/models').Track;
+
+/*
+ * script-specific config
+ */
+config = _.extend(config, {
+    development: {
+        limit: {
+            artists: 500,
+            tracks: 100
+        }
+    },
+
+    production: {
+        limit: {
+            artists: 500,
+            tracks: 100
+        }
+    },
+
+    test: {
+        limit: {
+            artists: 5,
+            tracks: 5
+        }
+    }
+}[process.env.NODE_ENV]);
 
 /*
  * Last.fm API singleton.
@@ -22,14 +47,26 @@ var config = require('./config'),
  */
 var lastfm = new (function() {
     var self = this;
-    this.hostname = "http://ws.audioscrobbler.com/";
+    this.hostname = "ws.audioscrobbler.com";
     this.port = 80;
     this.base_path = "/2.0";
     this.headers = { "user-agent": config.user_agent };
     this.api_key = config.lastfm.api_key;
 
     this.artist = {
-        get_top_tracks: function(/* mbid, [options,] callback */) {
+        /*
+         * ---------------------------------------------------------
+         * artist.get_top_tracks: endpoint for LastFM's getTopTracks
+         * ---------------------------------------------------------
+         *     args:
+         *         mbid: musicbrainz ID of the artist
+         *         [options]: additional parameters for the url's query string
+         *         callback: function executed on data receipt
+         * ---------------------------------------------------------
+         */
+
+        get_top_tracks: function() {
+            debugger;
             var args = new (vargs)(arguments);
             if(!args.callbackGiven()) {
                 console.log("[ERROR] last.fm API functions need a valid callback function.")
@@ -48,15 +85,23 @@ var lastfm = new (function() {
             };
             var query_params = has_options ? _.extend(options, default_params) : default_params;
             var path = self.base_path + "?" + querystring.stringify(query_params);
-            return http.get(_.extend(self, { path: path }), function(res) {
-                res.setEncoding("utf8");
-                res.on("data", callback);
-            });
+            return http.get(_.extend(self, { path: path }), callback);
         }
     };
 
     this.tag = {
-        get_top_artists: function(/* tagname, [options,] callback */) {
+        /*
+         * --------------------------------------------------------
+         * tag.get_top_artists: endpoint for LastFM's getTopArtists
+         * --------------------------------------------------------
+         *     args:
+         *         tagname: name of the tag on LastFM
+         *         [options]: additional parameters for the url's query string
+         *         callback: function executed on data receipt
+         * --------------------------------------------------------
+         */
+
+        get_top_artists: function() {
             var args = new (vargs)(arguments);
             if(!args.callbackGiven()) {
                 console.log("[ERROR] last.fm API functions need a valid callback function.")
@@ -75,25 +120,35 @@ var lastfm = new (function() {
             };
             var query_params = has_options ? _.extend(options, default_params) : default_params;
             var path = self.base_path + "?" + querystring.stringify(query_params);
-            return http.get(_.extend(self, { path: path }), function(res) {
-                res.setEncoding("utf8");
-                res.on("data", callback);
-            });
+            return http.get(_.extend(self, { path: path }), callback);
         }
     };
 })();
 
 /*
  * MusicBrainz API singleton.
+ * (not a general API, only implements needed functions)
  */
 var musicbrainz = new (function() {
     var self = this;
-    this.hostname = "http://www.musicbrainz.org/";
+    this.hostname = "www.musicbrainz.org";
     this.port = 80;
     this.base_path = "/ws/2";
     this.headers = { "user-agent": config.user_agent };
 
-    this.lookup = function(/* entity, mbid, [options,] callback */) {
+    /*
+     * --------------------------------------------------
+     * lookup: endpoint for musicbrainz lookup webservice
+     * --------------------------------------------------
+     *     args:
+     *         entity: the class of musicbrainz entities (e.g. artist, recording, release, ...)
+     *         mbid: musicbrainz ID of the entity
+     *         [options]: additional parameters for the url's query string
+     *         callback: function executed on data receipt
+     * --------------------------------------------------
+     */
+
+    this.lookup = function() {
         var args = new (vargs)(arguments);
         if(!args.callbackGiven()) {
             console.log("[ERROR] musicbrainz API functions need a valid callback function.")
@@ -107,13 +162,21 @@ var musicbrainz = new (function() {
             has_options = args.length > 2;
         options = has_options ? _.extend({ fmt: "json" }, options) : { fmt: "json" };
         var path = self.base_path + "/" + entity + "/" + mbid + (has_options ? "?" + querystring.stringify(options) : "");
-        return http.get(_.extend(self, { path: path }), function(res) {
-            res.setEncoding("utf8");
-            res.on("data", callback);
-        });
+        return http.get(_.extend(self, { path: path }), callback);
     };
 
-    this.browse = function(/* entity, [options,] callback */) {
+    /*
+     * --------------------------------------------------
+     * browse: endpoint for musicbrainz browse webservice
+     * --------------------------------------------------
+     *     args:
+     *         entity: the class of musicbrainz entities (e.g. artist, recording, release, ...)
+     *         [options]: additional parameters for the url's query string
+     *         callback: function executed on data receipt
+     * --------------------------------------------------
+     */
+
+    this.browse = function() {
         var args = new (vargs)(arguments);
         if(!args.callbackGiven()) {
             console.log("[ERROR] musicbrainz API functions need a valid callback function.")
@@ -126,13 +189,22 @@ var musicbrainz = new (function() {
             has_options = args.length > 1;
         options = has_options ? _.extend({ fmt: "json" }, options) : { fmt: "json" };
         var path = self.base_path + "/" + entity + (has_options ? "?" + querystring.stringify(options) : "");
-        return http.get(_.extend(self, { path: path }), function(res) {
-            res.setEncoding("utf8");
-            res.on("data", callback);
-        });
+        return http.get(_.extend(self, { path: path }), callback);
     };
 
-    this.search = function(/* entity, querystring, [options,] callback */) {
+    /*
+     * --------------------------------------------------
+     * search: endpoint for musicbrainz search webservice
+     * --------------------------------------------------
+     *     args:
+     *         entity: the class of musicbrainz entities (e.g. artist, recording, release, ...)
+     *         querystring: Lucene-style querystring for musicbrainz searchs
+     *         [options]: additional parameters for the url's query string
+     *         callback: function executed on data receipt
+     * --------------------------------------------------
+     */
+
+    this.search = function() {
         var args = new (vargs)(arguments);
         if(!args.callbackGiven()) {
             console.log("[ERROR] musicbrainz API functions need a valid callback function.")
@@ -147,10 +219,7 @@ var musicbrainz = new (function() {
         options = has_options ? _.extend({ fmt: "json" }, options) : { fmt: "json" };
         options = _.extend({ query: qs }, options);
         var path = self.base_path + "/" + entity + "?" + querystring.stringify(qs_opts);
-        return http.get(_.extend(self, { path: path }), function(res) {
-            res.setEncoding("utf8");
-            res.on("data", callback);
-        });
+        return http.get(_.extend(self, { path: path }), callback);
     };
 })();
 
@@ -163,27 +232,37 @@ var musicbrainz = new (function() {
 
 (function() {
     // initialize nano
-    var couch = nano(config.database.host + ":" + config.database.port),
-        db = couch.use(config.database.name),
-        artists = new Backbone.Collection([], { model: Artist });
-    // TODO: initialize database if it doesn't exist
+    var artists = new Backbone.Collection([], { model: Artist });
 
     /*
-     * Workflow callbacks
-     *     handle_top_artists: get 500 top artists with tag "hip-hop" (1 reqs)
-     *     handle_top_tracks: get 100 top tracks for every artist (1 x 500 reqs)
-     *     handle_search_recordings: get artists credits for all known tracks (god knows how many reqs)
+     * --------------------------------------------------------------------- 
+     * handle_top_artists: process JSON from getTopArtists requests and save
+     *         results to CouchDB via appropriate Backbone models.
+     * --------------------------------------------------------------------- 
+     *     args:
+     *         request: raw request_queue object
+     *         response: JSON response received from LastFM
+     *     returns:
+     *         an array of mbids of all artists processed
+     * --------------------------------------------------------------------- 
      */
+
+    // TODO: artist_mbids doesn't contain anything due to asynchronicity.
+    // instead, have save_success push the query object request directly and
+    // have request_queue.next spin until it gets a new request. the script
+    // will then terminate on special 'quit' request.
     var handle_top_artists = function(request, response) {
         var req_artists = response.topartists.artist,
             artist_mbids = [];
         _.each(req_artists, function(artist_json) {
             var artist = new Artist({ _id: artist_json.mbid }),
                 save_success = function(m, r, o) {
+                    debugger;
                     console.log("Successfully saved " + m._id + "!");
                     artist_mbids.push(m._id);
                     artists.add(m);
                 }, save_error = function(m, r, o) {
+                    debugger;
                     console.log("Could not save " + m._id);
                 };
             // save after fetching to ensure we have a _rev
@@ -204,6 +283,19 @@ var musicbrainz = new (function() {
         return artist_mbids;
     };
 
+    /*
+     * --------------------------------------------------------------------- 
+     * handle_top_tracks: process JSON from getTopTracks requests and save
+     *         results to CouchDB via appropriate Backbone models.
+     * --------------------------------------------------------------------- 
+     *     args:
+     *         request: raw request_queue object
+     *         response: JSON response received from LastFM
+     *     returns:
+     *         an array of mbids of all tracks processed
+     * --------------------------------------------------------------------- 
+     */
+
     var handle_top_tracks = function(request, response) {
         var req_tracks = response.toptracks.track,
             track_mbids = [];
@@ -212,10 +304,12 @@ var musicbrainz = new (function() {
             if(request.max > request.limit * (request.page - 1) + i) {
                 var track = new Track({ _id: track_json.mbid }),
                     save_success = function(m, r, o) {
+                        debugger;
                         console.log("Successfully saved " + m._id + "!");
                         track_mbids.push(m._id);
                         artists.get(request.artist).tracks.add(m);
                     }, save_error = function(m, r, o) {
+                        debugger;
                         console.log("Could not save " + m._id);
                     };
                 // save after fetching to ensure we have a _rev
@@ -237,12 +331,28 @@ var musicbrainz = new (function() {
         return track_mbids;
     };
 
+    /*
+     * --------------------------------------------------------------------- 
+     * handle_search_recordings: process JSON from musicbrainz recordings
+     *         search requests and save artist credits to appropriate tracks.
+     * --------------------------------------------------------------------- 
+     *     args:
+     *         request: raw request_queue object
+     *         response: JSON response received from MusicBrainz
+     *     returns:
+     *         a search_recordings stats object: {
+     *             count: total number of recordings found for this query
+     *             tracks: array of mbids of all tracks processed in this page
+     *         }        
+     * --------------------------------------------------------------------- 
+     */
+
     var handle_search_recordings = function(request, response) {
         var req_search = response.recording,
             track_stats = {
-                count: response.count
-                 tracks: _.map(response.recording, function(r) { return r._id; })
-             };
+                count: response.count,
+                tracks: _.map(response.recording, function(r) { return r._id; })
+            };
         _.each(req_search, function(track_json) {
             var artist_id = request.artist,
                 track_id = track_json.id;
@@ -271,27 +381,49 @@ var musicbrainz = new (function() {
     };
 
     /*
+     * -------------------------------------------------------------------
      * request_queue: singleton object that queues requests to last.fm and
-     *     MusicBrainz APIs over a predefined workflow. 
+     *     MusicBrainz APIs over a predefined workflow. The queue's workflow is
+     *     broken down into discrete stages, each of which is executed in a
+     *     mutually exclusive fashion (i.e. no interleavings of requests of
+     *     different sorts) and specific order.
+     *
+     *     Workflow:
+     *         top_artists_fn: get 500 top artists with tag "hip-hop" (1 reqs)
+     *         top_tracks_fn: get 100 top tracks for every artist (1 x 500 reqs)
+     *         search_recordings_fn: get artists credits for all known tracks
+     *             (god knows how many reqs)
+     * -------------------------------------------------------------------
      */
     var request_queue = new (function(top_artists_fn, top_tracks_fn, search_recordings_fn) {
         if(!_.isFunction(top_artists_fn) || !_.isFunction(top_tracks_fn) || !_.isFunction(search_recordings_fn))
             console.log("[ERROR] request_queue requires three callback functions.");
         else {
             var self = this;
+            // callbacks: convenience mapping of requests to callbacks.
             this.callbacks = {
                 "top_artists": top_artists_fn,
                 "top_tracks": top_tracks_fn,
                 "search_recordings": search_recordings_fn
             };
+            // requests: queue of request metadata.
+            //     initially contains first query to be executed. (top_artists)
             this.requests = [{ // initially seeded with top_artists query
-                type: "top_artists"
-                limit: 500
+                type: "top_artists",
+                limit: config.limit.artists
             }];
+            // ticks: time (in ms) to delay requests, to avoid rate limiting
             this.ticks = {
                 lastfm: 200,
                 musicbrainz: 1000
             };
+
+            /*
+             * -----------------------------------------------------
+             * next: execute the next request available in the queue
+             *         [aliases: run]
+             * -----------------------------------------------------
+             */
 
             this.next = this.run = function() {
                 var req = this.requests[0];
@@ -311,70 +443,144 @@ var musicbrainz = new (function() {
                 console.log("Request issued: " + JSON.stringify(req));
             };
 
+            /*
+             * ------------------------------------------------------------
+             * top_artists: issue a getTopArtists request to LastFM and add
+             *         more queries to the queue based on the results
+             * ------------------------------------------------------------
+             *     args:
+             *         req: a requeust_queue object
+             * ------------------------------------------------------------
+             */
+             
             this.top_artists = function(req) {
                 var options = _.pick(req, "limit");
-                lastfm.tag.get_top_artists("hip-hop", options, function(chunk) {
-                    var response = JSON.parse(chunk);
-                    if(_.has(response, "error"))
-                        console.log("[ERROR] From last.fm: '" + response.error + ": " + response.message + "'");
-                    else {
-                        console.log("Successful response from last.fm. " + JSON.stringify(req));
-                        var artist_mbids = self.callbacks[req.type](req, response);
-                        _.chain(artist_mbids).map(function(mbid) {
-                            return { type: "top_tracks", artist: mbid, limit: 100, page: 1, max: 100 };
-                        }).each(function(request) {
-                            self.requests.push(request);
-                        }).value();
-                        setTimeout(self.next, self.ticks.lastfm);
-                    }
+                // issue getTopArtists request to LastFM for tag hip-hop
+                lastfm.tag.get_top_artists("hip-hop", options, function(res) {
+                    var json_response = "";
+                    res.setEncoding("utf8");
+                    res.on("data", function(chunk) {
+                        json_response += chunk;
+                    });
+                    res.on("end", function() {
+                        debugger;
+                        var response = JSON.parse(json_response);
+                        if(_.has(response, "error"))
+                            console.log("[ERROR] From last.fm: '" + response.error + ": " + response.message + "'");
+                        else {
+                            console.log("Successful response from last.fm. " + JSON.stringify(req));
+                            // add getTopTracks requests to queue based on callback results
+                            var artist_mbids = self.callbacks[req.type](req, response);
+                            _.chain(artist_mbids).map(function(mbid) {
+                                return { type: "top_tracks", artist: mbid, limit: config.limit.tracks, page: 1, max: config.limit.tracks };
+                            }).each(function(request) {
+                                self.requests.push(request);
+                            }).value();
+                            setTimeout(self.next, self.ticks.lastfm);
+                        }
+                    });
+                }).on('error', function(e) {
+                    debugger;
+                    console.log("Error encountered: " + e.message);
+                    console.log(e.stack);
+                    console.log(JSON.stringify(e));
                 });
             };
 
+            /*
+             * ---------------------------------------------------------------
+             * top_tracks: issue a getTopTracks request to LastFM and add more
+             *         queries to the queue based on the results
+             * ---------------------------------------------------------------
+             *     args:
+             *         req: a requeust_queue object
+             * ---------------------------------------------------------------
+             */
+            
             this.top_tracks = function(req) {
                 var options = _.pick(req, "limit", "page");
-                lastfm.artist.get_top_tracks(req.artist, options, function(chunk) {
-                    var response = JSON.parse(chunk);
-                    if(_.has(response, "error"))
-                        console.log("[ERROR] From last.fm: '" + response.error + ": " + response.message + "'");
-                    else {
-                        console.log("Successful response from last.fm. " + JSON.stringify(req));
-                        var track_mbids = self.callbacks[req.type](req, response),
-                            last_page = parseInt(response.toptracks.track["@attr"].totalPages);
-                        if(req.max <= track_mbids.length + req.limit * (req.page - 1) || req.page >= last_page)
-                            console.log("Found " + req.max + " top tracks for " + req.artist + "; continuning...");
+                // issue getTopTrakcss request to LastFM for given artist
+                lastfm.artist.get_top_tracks(req.artist, options, function(res) {
+                    var json_response = "";
+                    res.setEncoding("utf8");
+                    res.on("data", function(chunk) {
+                        json_response += chunk;
+                    });
+                    res.on("end", function() {
+                        debugger;
+                        var response = JSON.parse(json_response);
+                        if(_.has(response, "error"))
+                            console.log("[ERROR] From last.fm: '" + response.error + ": " + response.message + "'");
                         else {
-                            // add next top tracks page request BEFORE track requests
+                            console.log("Successful response from last.fm. " + JSON.stringify(req));
+                            // add getTopTracks requests to queue based on callback results
+                            var track_mbids = self.callbacks[req.type](req, response),
+                                last_page = parseInt(response.toptracks.track["@attr"].totalPages);
+                            if(req.max <= track_mbids.length + req.limit * (req.page - 1) || req.page >= last_page)
+                                console.log("Found " + req.max + " top tracks for " + req.artist + "; continuning...");
+                            else {
+                                // add next top tracks page request BEFORE track requests
+                                var next_req = _.extend(req, { page: req.page + 1});
+                                self.requests.push(next_req);
+                            }
+                            // add search_recordings requests
+                            _.chain(track_mbids).map(function(mbid) {
+                                return {
+                                    type: "search_recordings",
+                                    artist: req.artist,
+                                    limit: 100,
+                                    page: 1
+                                };
+                            }).each(function(request) {
+                                self.requests.push(request);
+                            }).value();
+                            setTimeout(self.next, self.ticks.lastfm);
+                        }
+                    });
+                }).on('error', function(e) {
+                    console.log("Error encountered: " + e.message);
+                    console.log(e.stack);
+                    console.log(JSON.stringify(e));
+                });
+            };
+
+            /*
+             * --------------------------------------------------------------
+             * search_recordings: issue a recordings search request to
+             *         MusicBrainz and add more queries to the queue based on
+             *         the results
+             * --------------------------------------------------------------
+             *     args:
+             *         req: a requeust_queue object
+             * --------------------------------------------------------------
+             */
+            
+            this.search_recordings = function(req) {
+                var options = { limit: req.limit, offset: req.page * req.limit, inc: "artist-credits" };
+                // issue search for recordings with given artist
+                musicbrainz.search("recording", "arid:" + req.artist, options, function(res) {
+                    var json_response = "";
+                    res.setEncoding("utf8");
+                    res.on("data", function(chunk) {
+                        json_response += chunk;
+                    });
+                    res.on("end", function() {
+                        debugger;
+                        var response = JSON.parse(json_response);
+                        // possibly add more pages of this request
+                        var track_stats = self.callbacks[req.type](req, response);
+                        if(track_stats.count <= track_stats.tracks.length + req.limit * (req.page - 1))
+                            console.log("Found credits for " + track_stats.count + " tracks by " + req.artist + "; continuing...");
+                        else {
                             var next_req = _.extend(req, { page: req.page + 1});
                             self.requests.push(next_req);
                         }
-                        // add track requests
-                        _.chain(track_mbids).map(function(mbid) {
-                            return {
-                                type: "search_recordings",
-                                artist: req.artist,
-                                limit: 100,
-                                page: 1
-                            };
-                        }).each(function(request) {
-                            self.requests.push(request);
-                        }).value();
-                        setTimeout(self.next, self.ticks.lastfm);
-                    }
-                });
-            };
-
-            this.search_recordings = function(req) {
-                var options = { limit: req.limit, offset: req.page * req.limit, inc: "artist-credits" };
-                musicbrainz.search("artist", "arid:" + req.artist, options, function(chunk) {
-                    var response = JSON.parse(chunk);
-                    var track_stats = self.callbacks[req.type](req, response);
-                    if(track_stats.count <= track_stats.tracks.length + req.limit * (req.page - 1))
-                        console.log("Found credits for " + track_stats.count + " tracks by " + req.artist + "; continuing...");
-                    else {
-                        var next_req = _.extend(req, { page: req.page + 1});
-                        self.requests.push(next_req);
-                    }
-                    setTimeout(self.next, self.ticks.musicbrainz);
+                        setTimeout(self.next, self.ticks.musicbrainz);
+                    });
+                }).on('error', function(e) {
+                    console.log("Error encountered: " + e.message);
+                    console.log(e.stack);
+                    console.log(JSON.stringify(e));
                 });
             };
         }
