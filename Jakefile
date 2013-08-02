@@ -19,7 +19,7 @@ task('metadata', [], function() {
         }
     }
     // run the script as a child process
-    var procs = ["node ./metadata.js"];
+    var procs = ["node ./backend/metadata.js"];
     jake.exec(procs, { printStdout: true, printStderr: true }, function() {
         console.log("Finished running '" + JSON.stringify(procs) + "'");
         complete();

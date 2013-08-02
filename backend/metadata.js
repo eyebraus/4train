@@ -5,15 +5,15 @@
  * and Last.fm API.
  */
 
-var config = require('./config'),
+var config = require('../config'),
     _ = require('underscore')._,
     Backbone = require('backbone'),
     querystring = require('querystring'),
     nano = require('nano'),
     http = require('http'),
     vargs = require('vargs').Constructor,
-    Artist = require('./public/javascripts/models').Artist,
-    Track = require('./public/javascripts/models').Track;
+    Artist = require('../public/javascripts/models').Artist,
+    Track = require('../public/javascripts/models').Track;
 
 /*
  * script-specific config
