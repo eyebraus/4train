@@ -66,7 +66,6 @@ var lastfm = new (function() {
          */
 
         get_top_tracks: function() {
-            debugger;
             var args = new (vargs)(arguments);
             if(!args.callbackGiven()) {
                 console.log("[ERROR] last.fm API functions need a valid callback function.")
@@ -218,7 +217,7 @@ var musicbrainz = new (function() {
             has_options = args.length > 2;
         options = has_options ? _.extend({ fmt: "json" }, options) : { fmt: "json" };
         options = _.extend({ query: qs }, options);
-        var path = self.base_path + "/" + entity + "?" + querystring.stringify(qs_opts);
+        var path = self.base_path + "/" + entity + "?" + querystring.stringify(options);
         return http.get(_.extend(self, { path: path }), callback);
     };
 })();
@@ -255,29 +254,37 @@ var musicbrainz = new (function() {
         var req_artists = response.topartists.artist,
             artist_mbids = [];
         _.each(req_artists, function(artist_json) {
-            var artist = new Artist({ _id: artist_json.mbid }),
-                save_success = function(m, r, o) {
-                    debugger;
-                    console.log("Successfully saved " + m._id + "!");
-                    artist_mbids.push(m._id);
-                    artists.add(m);
-                }, save_error = function(m, r, o) {
-                    debugger;
-                    console.log("Could not save " + m._id);
-                };
-            // save after fetching to ensure we have a _rev
-            artist.fetch({
-                // success: model already existed, update
-                "success": function(model, response, options) {
-                    model.save(artist_json, { "success": save_success, "error": save_error });
-                },
-
-                // error: model didn't exist, create
-                "error": function(model, response, options) {
-                    console.log("Problem fetching artist " + artist._id + " from database.");
-                    artist.save(artist_json, { "success": save_success, "error": save_error });
-                }
-            });
+            // check validity of found json
+            artist_json = Artist.from_lastfm(artist_json);
+            var test_artist = new Artist(artist_json);
+            if(!test_artist.isValid())
+                console.log("Submitted artist JSON is not valid (" + test_artist.validationError + ")");
+            else {
+                var artist = new Artist({ _id: artist_json._id }),
+                    save_success = function(m, r, o) {
+                        debugger;
+                        console.log("Successfully saved artist " + m.get("_id") + "!");
+                        artists.add(m);
+                    }, save_error = function(m, r, o) {
+                        debugger;
+                        console.log("Could not save artist " + m.get("_id"));
+                    };
+                // save after fetching to ensure we have a _rev
+                artist.fetch({
+                    // success: model already existed, update
+                    "success": function(model, response, options) {
+                        model.save(artist_json, { "success": save_success, "error": save_error });
+                    },
+    
+                    // error: model didn't exist, create
+                    "error": function(model, response, options) {
+                        console.log("Problem fetching artist " + artist.get("_id") + " from database.");
+                        artist.save(artist_json, { "success": save_success, "error": save_error });
+                    }
+                });
+                // add artist to request queue
+                artist_mbids.push(artist.get("_id"));
+            }
         });
         
         return artist_mbids;
@@ -302,29 +309,35 @@ var musicbrainz = new (function() {
         _.each(req_tracks, function(track_json, i) {
             // don't add more tracks than were asked for!
             if(request.max > request.limit * (request.page - 1) + i) {
-                var track = new Track({ _id: track_json.mbid }),
-                    save_success = function(m, r, o) {
-                        debugger;
-                        console.log("Successfully saved " + m._id + "!");
-                        track_mbids.push(m._id);
-                        artists.get(request.artist).tracks.add(m);
-                    }, save_error = function(m, r, o) {
-                        debugger;
-                        console.log("Could not save " + m._id);
-                    };
-                // save after fetching to ensure we have a _rev
-                track.fetch({
-                    // success: model already existed, update
-                    "success": function(model, response, options) {
-                        model.save(track_json, { "success": save_success, "error": save_error });
-                    },
-    
-                    // error: model didn't exist, create
-                    "error": function(model, response, options) {
-                        console.log("Problem fetching artist " + artist._id + " from database.");
-                        track.save(track_json, { "success": save_success, "error": save_error });
-                    }
-                });
+                // check validity of track
+                track_json = Track.from_lastfm(track_json);
+                var test_track = new Track(track_json);
+                if(!test_track.isValid())
+                    console.log("Submitted track JSON is not valid (" + test_track.validationError + ")");
+                else {
+                    var track = new Track({ _id: track_json._id }),
+                        save_success = function(m, r, o) {
+                            console.log("Successfully saved track " + m.get("_id") + "!");
+                            artists.get(request.artist).get("tracks").add(m);
+                        }, save_error = function(m, r, o) {
+                            console.log("Could not save track " + m.get("_id"));
+                        };
+                    // save after fetching to ensure we have a _rev
+                    track.fetch({
+                        // success: model already existed, update
+                        "success": function(model, response, options) {
+                            model.save(track_json, { "success": save_success, "error": save_error });
+                        },
+        
+                        // error: model didn't exist, create
+                        "error": function(model, response, options) {
+                            console.log("Problem fetching track " + track.get("_id") + " from database.");
+                            track.save(track_json, { "success": save_success, "error": save_error });
+                        }
+                    });
+                    // add track to request queue
+                    track_mbids.push(track.get("_id"));
+                }
             }
         });
         
@@ -357,7 +370,7 @@ var musicbrainz = new (function() {
             var artist_id = request.artist,
                 track_id = track_json.id;
             // only handle this track if we found it on last.fm
-            if(artists.get(artist_id) && artists.get(artist_id).tracks.get(track_id)) {
+            if(artists.get(artist_id) && _.indexOf(request.tracks, track_id) > -1) {
                 // iterate over all artist credits
                 var artist_credits = response.recording["artist-credit"];
                 _.each(artist_credits, function(credit_json) {
@@ -368,7 +381,7 @@ var musicbrainz = new (function() {
                         credit_name: credit_json.name,
                         joinphrase: credit_json.joinphrase
                     };
-                    var track_credits = artists.get(artist_id).tracks.get(track_id).credits;
+                    var track_credits = artists.get(artist_id).get("tracks").get(track_id).credits;
                     track_credits = _.union([credit], track_credits);
                     artists.get(artist_id).set("tracks", track_credits);
                 });
@@ -385,8 +398,7 @@ var musicbrainz = new (function() {
      * request_queue: singleton object that queues requests to last.fm and
      *     MusicBrainz APIs over a predefined workflow. The queue's workflow is
      *     broken down into discrete stages, each of which is executed in a
-     *     mutually exclusive fashion (i.e. no interleavings of requests of
-     *     different sorts) and specific order.
+     *     specific order.
      *
      *     Workflow:
      *         top_artists_fn: get 500 top artists with tag "hip-hop" (1 reqs)
@@ -412,11 +424,19 @@ var musicbrainz = new (function() {
                 type: "top_artists",
                 limit: config.limit.artists
             }];
+            // completed: tracks number of requests of each type totally completed
+            this.completed = {
+                "top_artists": 0,
+                "top_tracks": 0,
+                "search_recordings": 0
+            };
             // ticks: time (in ms) to delay requests, to avoid rate limiting
             this.ticks = {
                 lastfm: 200,
                 musicbrainz: 1000
             };
+            // last_tick: needed when queue is empty
+            this.last_tick = this.ticks.lastfm;
 
             /*
              * -----------------------------------------------------
@@ -426,16 +446,29 @@ var musicbrainz = new (function() {
              */
 
             this.next = this.run = function() {
+                debugger;
+                if(this.requests.length <= 0) {
+                    console.log("Request queue empty; trying again in " + this.last_tick + " ms");
+                    setTimeout(_.bind(this.next, this), this.last_tick);
+                    return true;
+                }
+
                 var req = this.requests[0];
                 this.requests = _.rest(this.requests);
 
                 if(req.type == "top_artists")
-                    self.top_artists(req);
+                    this.top_artists(req);
                 else if(req.type == "top_tracks")
-                    self.top_tracks(req);
+                    this.top_tracks(req);
                 else if(req.type == "search_recordings")
-                    self.search_recordings(req);
-                else {
+                    this.search_recordings(req);
+                else if(req.type == "quit") {
+                    console.log("All queries handled! Saving...");
+                    artists.each(function(artist) {
+                        artist.save();
+                    });
+                    return true;
+                } else {
                     console.log("[ERROR] request type '" + req.type + "' unknown to request_queue.");
                     return false;
                 }
@@ -463,7 +496,6 @@ var musicbrainz = new (function() {
                         json_response += chunk;
                     });
                     res.on("end", function() {
-                        debugger;
                         var response = JSON.parse(json_response);
                         if(_.has(response, "error"))
                             console.log("[ERROR] From last.fm: '" + response.error + ": " + response.message + "'");
@@ -476,11 +508,12 @@ var musicbrainz = new (function() {
                             }).each(function(request) {
                                 self.requests.push(request);
                             }).value();
-                            setTimeout(self.next, self.ticks.lastfm);
+                            self.completed.top_artists++;
+                            setTimeout(_.bind(self.next, self), self.ticks.lastfm);
                         }
                     });
                 }).on('error', function(e) {
-                    debugger;
+                    
                     console.log("Error encountered: " + e.message);
                     console.log(e.stack);
                     console.log(JSON.stringify(e));
@@ -501,13 +534,13 @@ var musicbrainz = new (function() {
                 var options = _.pick(req, "limit", "page");
                 // issue getTopTrakcss request to LastFM for given artist
                 lastfm.artist.get_top_tracks(req.artist, options, function(res) {
-                    var json_response = "";
+                    var json_response = "",
+                        all_tracks = [];
                     res.setEncoding("utf8");
                     res.on("data", function(chunk) {
                         json_response += chunk;
                     });
                     res.on("end", function() {
-                        debugger;
                         var response = JSON.parse(json_response);
                         if(_.has(response, "error"))
                             console.log("[ERROR] From last.fm: '" + response.error + ": " + response.message + "'");
@@ -515,26 +548,26 @@ var musicbrainz = new (function() {
                             console.log("Successful response from last.fm. " + JSON.stringify(req));
                             // add getTopTracks requests to queue based on callback results
                             var track_mbids = self.callbacks[req.type](req, response),
-                                last_page = parseInt(response.toptracks.track["@attr"].totalPages);
-                            if(req.max <= track_mbids.length + req.limit * (req.page - 1) || req.page >= last_page)
+                                last_page = parseInt(response.toptracks["@attr"].totalPages);
+                            all_tracks = _.union(all_tracks, track_mbids);
+                            if(req.max <= track_mbids.length + req.limit * (req.page - 1) || req.page >= last_page) {
                                 console.log("Found " + req.max + " top tracks for " + req.artist + "; continuning...");
-                            else {
+                                self.completed.top_tracks++;
+                                // add first search_recordings request ONLY ONCE
+                                self.requests.push({
+                                    type: "search_recordings",
+                                    artist: req.artist,
+                                    tracks: all_tracks,
+                                    limit: 100,
+                                    page: 1
+                                });
+                            } else {
                                 // add next top tracks page request BEFORE track requests
                                 var next_req = _.extend(req, { page: req.page + 1});
                                 self.requests.push(next_req);
                             }
-                            // add search_recordings requests
-                            _.chain(track_mbids).map(function(mbid) {
-                                return {
-                                    type: "search_recordings",
-                                    artist: req.artist,
-                                    limit: 100,
-                                    page: 1
-                                };
-                            }).each(function(request) {
-                                self.requests.push(request);
-                            }).value();
-                            setTimeout(self.next, self.ticks.lastfm);
+                            
+                            setTimeout(_.bind(self.next, self), self.ticks.lastfm);
                         }
                     });
                 }).on('error', function(e) {
@@ -565,17 +598,21 @@ var musicbrainz = new (function() {
                         json_response += chunk;
                     });
                     res.on("end", function() {
-                        debugger;
                         var response = JSON.parse(json_response);
                         // possibly add more pages of this request
                         var track_stats = self.callbacks[req.type](req, response);
-                        if(track_stats.count <= track_stats.tracks.length + req.limit * (req.page - 1))
+                        if(track_stats.count <= track_stats.tracks.length + req.limit * (req.page - 1)) {
                             console.log("Found credits for " + track_stats.count + " tracks by " + req.artist + "; continuing...");
-                        else {
+                            // check if this was the final request
+                            self.completed.search_recordings++;
+                        } else {
                             var next_req = _.extend(req, { page: req.page + 1});
                             self.requests.push(next_req);
                         }
-                        setTimeout(self.next, self.ticks.musicbrainz);
+                        // set quit event if all artists are done being queried
+                        if(self.completed.search_recordings >= artists.length)
+                            self.requests.push({ type: "quit" });
+                        setTimeout(_.bind(self.next, self), self.ticks.musicbrainz);
                     });
                 }).on('error', function(e) {
                     console.log("Error encountered: " + e.message);
