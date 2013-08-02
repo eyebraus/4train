@@ -46,7 +46,7 @@ module.exports = (function() {
     var env = envs[process.env.NODE_ENV];
     env.database.url = function() {
         var db = env.database;
-        return "http://" + db.auth + "@" + db.host + ":" + db.port + "/";
+        return "https://" + db.auth + "@" + db.host + "/";
     };
     return env;
 })();
