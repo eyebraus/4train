@@ -13,7 +13,8 @@ var config = require('../config'),
     http = require('http'),
     vargs = require('vargs').Constructor,
     Artist = require('../public/javascripts/models').Artist,
-    Track = require('../public/javascripts/models').Track;
+    Track = require('../public/javascripts/models').Track,
+    endpoints = require('./endpoints');
 
 /*
  * script-specific config

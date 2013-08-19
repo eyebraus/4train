@@ -18,14 +18,14 @@ var CouchModel = Backbone.Model.extend({
         return this.urlRoot + "/" + this.get("_id");
     },*/
 
-    sync: function(method, model, options) {
+    /*sync: function(method, model, options) {
         // make the database's url explicit
         if(!_.isUndefined(options) && !_.isUndefined(options.url))
             options.url = url.resolve(config.database.url(), options.url);
         else if(_.result(model, 'url'))
             options.url = url.resolve(config.database.url(), _.result(model, 'url'));
         return Backbone.sync.apply(this, [method, model, options]);
-    }
+    }*/
 });
 
 var CouchCollection = Backbone.Collection.extend({
